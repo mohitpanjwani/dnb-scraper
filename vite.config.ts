@@ -5,8 +5,6 @@ import Icons from 'unplugin-icons/vite'
 import IconsResolver from 'unplugin-icons/resolver'
 import Components from 'unplugin-vue-components/vite'
 import AutoImport from 'unplugin-auto-import/vite'
-import WindiCSS from 'vite-plugin-windicss'
-import windiConfig from './windi.config'
 import { r, port, isDev } from './scripts/utils'
 
 export const sharedConfig: UserConfig = {
@@ -101,8 +99,8 @@ export default defineConfig(({ command }) => ({
     ...sharedConfig.plugins!,
 
     // https://github.com/antfu/vite-plugin-windicss
-    WindiCSS({
-      config: windiConfig,
-    }),
+    // WindiCSS({
+    //   config: windiConfig,
+    // }),
   ],
 }))
