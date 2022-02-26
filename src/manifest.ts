@@ -29,7 +29,6 @@ export async function getManifest() {
     permissions: [
       'tabs',
       'storage',
-      'unlimitedStorage',
       'activeTab',
       'http://*/',
       'https://*/',

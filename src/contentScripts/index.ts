@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import { onMessage, sendMessage } from "webext-bridge";
+import { onMessage, sendMessage } from "webext-bridge"
 
 // Firefox `browser.tabs.executeScript()` requires scripts return a primitive value
 (() => {
@@ -9,19 +9,69 @@ import { onMessage, sendMessage } from "webext-bridge";
   }) */
 
   onMessage("start", ({ data }) => {
-    sendMessage("changeIcon", { icon: "resume" }, { context: "popup" })
     start(data)
-    sendMessage("changeIcon", { icon: "pause" }, { context: "popup" })
+  })
+
+  onMessage("stop", () => {
+    stop()
   })
 })()
 
-var data = []
-function start(scrapData) {
-  console.log("storageData", scrapData)
+let data = []
+const interval = null
+
+function start(data) {
+  if (document.readyState === 'ready' || document.readyState === 'complete') {
+    startScraping(data)
+  }
+  else {
+    document.onreadystatechange = function() {
+      if (document.readyState === "complete")
+        startScraping(data)
+    }
+  }
+}
+
+function stop() {
+  if (interval)
+    clearInterval(interval)
+}
+
+function checkIfLoaded(data) {
+  const interval = setInterval(() => {
+    if (document.getElementsByClassName('result-container').length >= 1) {
+      clearInterval(interval)
+      scrapPage(data)
+    }
+  }, 1000)
+}
+
+function startScraping(data) {
+  const pageLoaded = document.getElementsByClassName('result-container').length >= 1
+
+  if (pageLoaded)
+    scrapPage(data)
+
+  else
+    checkIfLoaded(data)
+}
+
+function scrapPage({ pageNumber }) {
+  console.log('starting', pageNumber)
+
   // Get table headers
   const columns = document.querySelectorAll(
     ".result-container .ant-table-header table thead th:not(.ant-table-selection-column):not(.actions)",
   )
+
+  const currentPage = document.querySelector(".pagination-current-page")?.textContent || 1
+
+  // Exit if the current page is already scraped.
+  if (parseInt(currentPage) < parseInt(pageNumber)) {
+    sendMessage("onStop", { }, { context: "popup" })
+    return
+  }
+
   if (columns?.length) {
     data = [
       [...columns]
@@ -50,17 +100,10 @@ function start(scrapData) {
         })
         data.push(row)
       }
-      console.log("newData:", data)
 
-      if (data) {
-        const finalData = {
-          page: `${
-            document.querySelector(".pagination-current-page").textContent
-          }`,
-          data,
-        }
-        chrome.storage.local.set({ scrapData: finalData })
-      }
+      sendMessage("changePage", { page: currentPage, data }, { context: "popup" })
+
+      document.getElementById('next')?.click()
     }
   }
 }
