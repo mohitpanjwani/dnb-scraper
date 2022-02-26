@@ -4,6 +4,7 @@
     "no-console": 0,
     "no-var": 0,
     "vars-on-top": 0,
-    "quotes": [0, "double"]
+    "quotes": [0, "double"],
+    "curly":"off"
   }
 }

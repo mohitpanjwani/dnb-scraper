@@ -89,38 +89,101 @@
           rounded-md
           shadow-sm
           text-white
-          bg-green-600
-          hover:bg-green-700
-          focus:ring-green-500
         "
-        @click="send('download')"
+        :class="[
+          !isDownloading
+            ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
+            : 'bg-green-400 hover:bg-green-500 focus:ring-green-300',
+        ]"
+        @click="downloadCSV"
       >
-        <DownloadIcon class="h-5 w-5 mr-2" />
-        Download
+        <DownloadIcon v-if="!isDownloading" class="h-5 w-5 mr-2" />
+
+        <svg
+          v-else
+          class="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <circle
+            class="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            stroke-width="4"
+          ></circle>
+          <path
+            class="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          ></path>
+        </svg>
+        {{ !isDownloading ? "Download" : "Processing..." }}
       </button>
     </div>
   </div>
 </template>
 
 <script setup>
-// import { storageDemo } from '~/logic/storage'
 import { RefreshIcon, PlayIcon, PauseIcon } from "@heroicons/vue/solid"
 import { DownloadIcon } from "@heroicons/vue/outline"
 import { sendMessage, onMessage } from "webext-bridge"
 
 const isFetching = ref(false)
+const isDownloading = ref(false)
 
 function send(action) {
   console.log("action", action)
-  chrome.tabs.query({ currentWindow: true, active: true }, (tabs) => {
+  chrome.tabs.query({ currentWindow: true, active: true }, async(tabs) => {
     const activeTab = tabs[0].id
-    console.log("tabId", activeTab)
-    sendMessage(action, {}, `content-script@${activeTab}`)
-    // sendMessage(action, {}, { context: "content-script", tabId: activeTab })
+    // sendMessage(action, {}, `content-script@${activeTab}`)
+
+    const scrapData = await getLocalStorageValue("scrapData")
+    sendMessage(
+      action,
+      { scrapData },
+      { context: "content-script", tabId: activeTab },
+    )
   })
 }
 
 onMessage("changeIcon", ({ data }) => {
   isFetching.value = data.icon === "resume"
 })
+
+async function getLocalStorageValue(key) {
+  return new Promise((resolve, reject) => {
+    try {
+      chrome.storage.local.get(key, (result) => {
+        resolve(result)
+      })
+    }
+    catch (ex) {
+      console.error(ex)
+      reject(ex)
+    }
+  })
+}
+
+async function downloadCSV() {
+  isDownloading.value = true
+  const scrapData = await getLocalStorageValue("scrapData")
+  setTimeout(() => {
+    let csvContent = scrapData.scrapData.data
+      .map(e => e.join(","))
+      .join("\n")
+    csvContent = `data:text/csv;charset=utf-8,${csvContent}`
+    const encodedUri = encodeURI(csvContent)
+    const downloadLink = document.createElement("a")
+    downloadLink.download = `page${scrapData.scrapData.page}.csv`
+    downloadLink.href = encodedUri
+    downloadLink.style.display = "none"
+    document.body.appendChild(downloadLink)
+    downloadLink.click()
+    document.body.removeChild(downloadLink)
+    isDownloading.value = false
+  }, 500)
+}
 </script>
