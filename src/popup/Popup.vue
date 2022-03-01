@@ -1,21 +1,35 @@
 <template>
   <div class="m-5 space-y-4">
-    <div class="flex text-gray-500 items-center text-sm">
-      Current Page:
-      <span class="ml-1 text-lg text-gray-800">{{ currentPageNumber }}</span>
-    </div>
+    <dl class="mt-5 grid grid-cols-1 gap-5">
+      <div class="px-2 py-3 bg-indigo-500 shadow rounded-lg overflow-hidden sm:p-6">
+        <dt class="text-sm font-medium text-gray-200 truncate">
+          Current Page
+        </dt>
+        <dd class="mt-1 text-3xl font-semibold text-white">
+          {{ currentPageNumber }}
+        </dd>
+      </div>
 
-    <div class="flex text-gray-500 items-center text-sm">
-      Last Scraped Page:
-      <span class="ml-1 text-lg text-gray-800">{{
-        getLastScrapedPageNumber
-      }}</span>
-    </div>
+      <div class="px-2 py-3 bg-gray-100 shadow rounded-lg overflow-hidden sm:p-6">
+        <dt class="text-sm font-medium text-gray-500 truncate">
+          Last Scraped Page
+        </dt>
+        <dd class="mt-1 text-3xl font-semibold text-gray-900">
+          {{
+            getLastScrapedPageNumber
+          }}
+        </dd>
+      </div>
 
-    <div class="flex text-gray-500 items-center text-sm">
-      Total Pages Scraped:
-      <span class="ml-1 text-lg text-gray-800">{{ getTotalPagesScraped }}</span>
-    </div>
+      <div class="px-2 py-3 bg-gray-100 shadow rounded-lg overflow-hidden sm:p-6">
+        <dt class="text-sm font-medium text-gray-500 truncate">
+          Total Pages Scraped
+        </dt>
+        <dd class="mt-1 text-3xl font-semibold text-gray-900">
+          {{ getTotalPagesScraped }}
+        </dd>
+      </div>
+    </dl>
 
     <div class="w-full text-center">
       <button
@@ -34,6 +48,7 @@
           shadow-sm
           text-white
           disabled:disabled:bg-gray-400
+          justify-center
         "
         :class="[
           !isDownloading
@@ -127,7 +142,7 @@
         @click="resetPage"
       >
         <RefreshIcon class="-ml-1 h-5 w-5 mr-2" />
-        <span>Reset</span>
+        <span>Reset Data</span>
       </button>
     </div>
   </div>
