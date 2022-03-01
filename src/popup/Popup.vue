@@ -142,12 +142,31 @@ import { scrapeStorage, strLastScraped } from "~/logic"
 const isLoading = ref(false)
 const isScrapping = ref(false)
 const isDownloading = ref(false)
-const currentPageNumber = ref(0)
-const lastPageNumber = ref(0)
+const currentPageNumber = ref(1)
+const lastPageNumber = ref(1)
+const status = ref(null) // RUNNING, STOPPED, COMPLETED
 
 onMounted(() => {
   isLoading.value = true
   send("init")
+})
+
+watch(status, () => {
+  let path = ""
+  switch (status.value) {
+    case "RUNNING":
+      path = "/assets/running.png"
+      break
+    case "STOPPED":
+      path = "/assets/stopping.png"
+      break
+    case "COMPLETED":
+      path = "/assets/complete.png"
+      break
+    default:
+      path = "/assets/default.png"
+  }
+  chrome.browserAction.setIcon({ path })
 })
 
 // get count of total scrapped page
@@ -156,7 +175,7 @@ const getTotalPagesScraped = computed(() => {
 })
 // get last scrapped page
 const getLastScrapedPageNumber = computed(() => {
-  return strLastScraped.value ? strLastScraped.value : 0
+  return strLastScraped.value ? parseInt(strLastScraped.value) : 0
 })
 
 // scrap actions
@@ -178,10 +197,9 @@ function send(action) {
     sendMessage(
       action,
       {
-        currentPageNumber: currentPageNumber.value,
-        lastPageNumber: lastPageNumber.value,
-        scrapeStorage: scrapeStorage.value,
-        totalPagesScraped: getTotalPagesScraped.value,
+        currentPageNumber: parseInt(currentPageNumber.value),
+        lastPageNumber: parseInt(lastPageNumber.value),
+        totalPagesScraped: parseInt(getTotalPagesScraped.value),
       },
       { context: "content-script", tabId: activeTab },
     )
@@ -192,6 +210,7 @@ function send(action) {
 function resetPage() {
   scrapeStorage.value = {}
   strLastScraped.value = 0
+  status.value = ""
   send("init")
 }
 
@@ -200,22 +219,39 @@ onMessage("setInitialData", ({ data }) => {
   currentPageNumber.value = data.currentPageNumber ? data.currentPageNumber : 1
   lastPageNumber.value = data.lastPageNumber ? data.lastPageNumber : 1
   isLoading.value = false
+
+  status.value
+    = parseInt(getTotalPagesScraped.value) === 0
+      ? ''
+      : (parseInt(lastPageNumber.value) === parseInt(getTotalPagesScraped.value)
+        ? "COMPLETED"
+        : "STOPPED")
 })
 // stop srapping
 onMessage("onStop", ({ data }) => {
   isScrapping.value = false
+  status.value
+    = parseInt(lastPageNumber.value) === parseInt(getTotalPagesScraped.value)
+      ? "COMPLETED"
+      : "STOPPED"
 })
 
 // change page
 onMessage("changePage", ({ data }) => {
   console.log("change page", data)
 
+  status.value = "RUNNING"
   strLastScraped.value = data.page
   scrapeStorage.value[data.page] = data.data
   if (parseInt(data.lastPage) > parseInt(data.page)) {
     currentPageNumber.value = parseInt(data.page) + 1
     send("start")
   }
+})
+
+// update current page number through goto change number
+onMessage("updateCurrentPageNumber", ({ data }) => {
+  currentPageNumber.value = data.gotoPageNumber ? data.gotoPageNumber : 1
 })
 
 // download scrapped content

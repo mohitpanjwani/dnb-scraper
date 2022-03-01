@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import { onMessage, sendMessage } from "webext-bridge"
+import { onMessage, sendMessage } from "webext-bridge";
 
 // Firefox `browser.tabs.executeScript()` requires scripts return a primitive value
 (() => {
@@ -52,10 +52,9 @@ function start(data) {
 }
 
 function stop() {
-  if (interval) {
-    clearInterval(interval)
-    sendMessage("onStop", {}, { context: "popup" })
-  }
+  if (interval) clearInterval(interval)
+
+  sendMessage("onStop", {}, { context: "popup" })
 }
 
 function checkIfLoaded(data) {
@@ -78,7 +77,7 @@ function startScraping(data) {
 function scrapPage({ currentPageNumber, lastPageNumber, totalPagesScraped }) {
   let columns = []
   const data = []
-  console.log("starting", currentPageNumber)
+  // console.log("starting", currentPageNumber)
 
   // Get table headers
   if (totalPagesScraped === 0) {
@@ -119,8 +118,22 @@ function scrapPage({ currentPageNumber, lastPageNumber, totalPagesScraped }) {
         { page: currentPageNumber, lastPage: lastPageNumber, data },
         { context: "popup" },
       )
-      if (parseInt(currentPageNumber) >= parseInt(lastPageNumber)) stop()
-      else document.getElementById("next")?.click()
+      if (currentPageNumber >= lastPageNumber) {
+        stop()
+        return false
+      }
+      else {
+        document.getElementById("next")?.click()
+      }
     }
   }
 }
+
+const gotoNumber = document.querySelector(".ant-input-number-input")
+gotoNumber?.addEventListener("change", (e) => {
+  sendMessage(
+    "updateCurrentPageNumber",
+    { gotoPageNumber: e.target.value },
+    { context: "popup" },
+  )
+})

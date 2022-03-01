@@ -14,7 +14,7 @@ export async function getManifest() {
     version: pkg.version,
     description: pkg.description,
     browser_action: {
-      default_icon: './assets/icon.png',
+      default_icon: './assets/default.png',
       default_popup: './dist/popup/index.html',
     },
     background: {
@@ -22,9 +22,9 @@ export async function getManifest() {
       persistent: false,
     },
     icons: {
-      16: './assets/icon.png',
-      48: './assets/icon.png',
-      128: './assets/icon.png',
+      16: './assets/default.png',
+      48: './assets/default.png',
+      128: './assets/default@2x.png',
     },
     permissions: [
       'tabs',
