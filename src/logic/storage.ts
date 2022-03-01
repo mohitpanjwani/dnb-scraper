@@ -1,3 +1,4 @@
 import { useStorageLocal } from '~/composables/useStorageLocal'
 
-export const storageDemo = useStorageLocal('webext-demo', 'Storage Demo', { listenToStorageChanges: true })
+export const scrapeStorage = useStorageLocal('scrapeData', {}, { listenToStorageChanges: true })
+export const strLastScraped = useStorageLocal('strLastScraped', 0, { listenToStorageChanges: true })
