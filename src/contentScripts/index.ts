@@ -8,6 +8,10 @@ import { onMessage, sendMessage } from "webext-bridge"
     console.log(`[vitesse-webext] Navigate from page "${data.title}"`)
   }) */
 
+  onMessage("init", () => {
+    init()
+  })
+
   onMessage("start", ({ data }) => {
     start(data)
   })
@@ -17,29 +21,46 @@ import { onMessage, sendMessage } from "webext-bridge"
   })
 })()
 
-let data = []
-const interval = null
+var interval = null
 
+function init() {
+  const stateCheck = setInterval(() => {
+    if (document.readyState === "complete") {
+      clearInterval(stateCheck)
+      const pageInfo = document.querySelector(".pagination-page-info")
+
+      if (pageInfo) {
+        const page = pageInfo.textContent.replace(/\s(of)\s/g, ",").split(",")
+        sendMessage(
+          "setInitialData",
+          { currentPageNumber: page[0], lastPageNumber: page[1] },
+          { context: "popup" },
+        )
+      }
+    }
+  }, 100)
+}
 function start(data) {
-  if (document.readyState === 'ready' || document.readyState === 'complete') {
+  if (document.readyState === "ready" || document.readyState === "complete") {
     startScraping(data)
   }
   else {
     document.onreadystatechange = function() {
-      if (document.readyState === "complete")
-        startScraping(data)
+      if (document.readyState === "complete") startScraping(data)
     }
   }
 }
 
 function stop() {
-  if (interval)
+  if (interval) {
     clearInterval(interval)
+    sendMessage("onStop", {}, { context: "popup" })
+  }
 }
 
 function checkIfLoaded(data) {
-  const interval = setInterval(() => {
-    if (document.getElementsByClassName('result-container').length >= 1) {
+  interval = setInterval(() => {
+    if (document.getElementsByClassName("result-container").length >= 1) {
       clearInterval(interval)
       scrapPage(data)
     }
@@ -47,40 +68,32 @@ function checkIfLoaded(data) {
 }
 
 function startScraping(data) {
-  const pageLoaded = document.getElementsByClassName('result-container').length >= 1
+  const pageLoaded
+    = document.getElementsByClassName("result-container").length >= 1
 
-  if (pageLoaded)
-    scrapPage(data)
-
-  else
-    checkIfLoaded(data)
+  if (pageLoaded) scrapPage(data)
+  else checkIfLoaded(data)
 }
 
-function scrapPage({ pageNumber }) {
-  console.log('starting', pageNumber)
+function scrapPage({ currentPageNumber, lastPageNumber, totalPagesScraped }) {
+  let columns = []
+  const data = []
+  console.log("starting", currentPageNumber)
 
   // Get table headers
-  const columns = document.querySelectorAll(
-    ".result-container .ant-table-header table thead th:not(.ant-table-selection-column):not(.actions)",
-  )
-
-  const currentPage = document.querySelector(".pagination-current-page")?.textContent || 1
-
-  // Exit if the current page is already scraped.
-  if (parseInt(currentPage) < parseInt(pageNumber)) {
-    sendMessage("onStop", { }, { context: "popup" })
-    return
+  if (totalPagesScraped === 0) {
+    columns = document.querySelectorAll(
+      ".result-container .ant-table-header table thead th:not(.ant-table-selection-column):not(.actions)",
+    )
+    columns = [...columns]
+      .filter(e => e.textContent !== "")
+      .map((e) => {
+        return `"${e.textContent.replace(/^\"(.+)\"$/, '"')}"`
+      })
+    data.push(columns)
   }
 
-  if (columns?.length) {
-    data = [
-      [...columns]
-        .filter(e => e.textContent !== "")
-        .map((e) => {
-          return `"${e.textContent.replace(/"/g, '"')}"`
-        }),
-    ]
-
+  if (totalPagesScraped > 0 || columns?.length > 0) {
     // Get table body content
     let rows = document.querySelectorAll(
       ".result-container .ant-table-body table tbody .ant-table-row",
@@ -96,14 +109,18 @@ function scrapPage({ pageNumber }) {
           return e.textContent.replace(/[\n?\r?\s?]+/g, " ")
         })
         row = row.map((e) => {
-          return `"${e.replace(/"/g, '"')}"`
+          return `"${e.replace(/^\"(.+)\"$/, '"')}"`
         })
         data.push(row)
       }
 
-      sendMessage("changePage", { page: currentPage, data }, { context: "popup" })
-
-      document.getElementById('next')?.click()
+      sendMessage(
+        "changePage",
+        { page: currentPageNumber, lastPage: lastPageNumber, data },
+        { context: "popup" },
+      )
+      if (parseInt(currentPageNumber) >= parseInt(lastPageNumber)) stop()
+      else document.getElementById("next")?.click()
     }
   }
 }

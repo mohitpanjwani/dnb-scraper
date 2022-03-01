@@ -1,64 +1,27 @@
 <template>
-  <div class="min-w-max m-5 space-y-5">
-    <div>
-      <label for="email" class="block text-sm font-medium text-gray-700">Current Page</label>
-      <div class="mt-1 flex rounded-md shadow-sm">
-        <div class="relative flex items-stretch flex-grow focus-within:z-10">
-          <input
-            v-model="currentPageNumber"
-            class="border focus:ring-indigo-500 focus:border-indigo-500 block w-full rounded-none rounded-l-md pl-4 text-base border-gray-300"
-            placeholder=""
-          >
-        </div>
-        <button
-          type="button"
-          class="-ml-px relative inline-flex items-center space-x-2 px-4 py-2 border border-gray-300 text-sm font-medium rounded-r-md text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-          @click="resetPage"
-        >
-          <RefreshIcon class="h-5 w-5 text-gray-400" aria-hidden="true" />
-          <span>Reset</span>
-        </button>
-      </div>
+  <div class="m-5 space-y-4">
+    <div class="flex text-gray-500 items-center text-sm">
+      Current Page:
+      <span class="ml-1 text-lg text-gray-800">{{ currentPageNumber }}</span>
+    </div>
+
+    <div class="flex text-gray-500 items-center text-sm">
+      Last Scraped Page:
+      <span class="ml-1 text-lg text-gray-800">{{
+        getLastScrapedPageNumber
+      }}</span>
     </div>
 
     <div class="flex text-gray-500 items-center text-sm">
       Total Pages Scraped:
-      <span class="ml-1 text-lg text-gray-800">{{ pagesScraped }}</span>
+      <span class="ml-1 text-lg text-gray-800">{{ getTotalPagesScraped }}</span>
     </div>
 
-    <div class="flex justify-between gap-5">
-      <button
-        class="
-          flex-1
-          inline-flex
-          whitespace-nowrap
-          border border-transparent
-          font-medium
-          px-4
-          py-2
-          text-sm
-          leading-5
-          rounded-md
-          shadow-sm
-          text-white
-        "
-        :class="[
-          !isFetching
-            ? 'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
-            : 'bg-indigo-400 hover:bg-indigo-500 focus:ring-indigo-300',
-        ]"
-        @click="sendAction"
-      >
-        <PlayIcon v-if="!isFetching" id="resume_icon" class="-ml-1 h-5 w-5 mr-2" />
-        <PauseIcon v-else id="pause_icon" class="-ml-1 h-5 w-5 mr-2" />
-        <span v-if="!isFetching"> Start Scraping </span>
-        <span v-else> Pause Scraping </span>
-      </button>
-
+    <div class="w-full text-center">
       <button
         id="download_btn"
         class="
-          flex-1
+          w-full
           inline-flex
           whitespace-nowrap
           border border-transparent
@@ -70,12 +33,14 @@
           rounded-md
           shadow-sm
           text-white
+          disabled:disabled:bg-gray-400
         "
         :class="[
           !isDownloading
             ? 'bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500'
             : 'bg-emerald-400 hover:bg-emerald-500 focus:ring-emerald-300',
         ]"
+        :disabled="isLoading || isScrapping"
         @click="downloadCSV"
       >
         <DownloadIcon v-if="!isDownloading" class="-ml-1 h-5 w-5 mr-2" />
@@ -104,6 +69,67 @@
         {{ !isDownloading ? "Download" : "Processing..." }}
       </button>
     </div>
+    <div class="flex justify-between gap-5">
+      <button
+        class="
+          flex-1
+          inline-flex
+          whitespace-nowrap
+          border border-transparent
+          font-medium
+          px-4
+          py-2
+          text-sm
+          leading-5
+          rounded-md
+          shadow-sm
+          text-white
+          disabled:bg-gray-400
+        "
+        :class="[
+          !isScrapping
+            ? 'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
+            : 'bg-indigo-500 hover:bg-indigo-600 focus:ring-indigo-400',
+        ]"
+        :disabled="isLoading"
+        @click="sendAction"
+      >
+        <PlayIcon
+          v-if="!isScrapping"
+          id="resume_icon"
+          class="-ml-1 h-5 w-5 mr-2"
+        />
+        <PauseIcon v-else id="pause_icon" class="-ml-1 h-5 w-5 mr-2" />
+        <span v-if="!isScrapping"> Start Scraping </span>
+        <span v-else> Pause Scraping </span>
+      </button>
+
+      <button
+        class="
+          flex-1
+          inline-flex
+          whitespace-nowrap
+          border border-transparent
+          font-medium
+          px-4
+          py-2
+          text-sm
+          leading-5
+          rounded-md
+          shadow-sm
+          text-white
+          bg-gray-600
+          hover:bg-gray-700
+          focus:ring-gray-500
+          disabled:bg-gray-400
+        "
+        :disabled="isLoading || isScrapping"
+        @click="resetPage"
+      >
+        <RefreshIcon class="-ml-1 h-5 w-5 mr-2" />
+        <span>Reset</span>
+      </button>
+    </div>
   </div>
 </template>
 
@@ -113,63 +139,86 @@ import { DownloadIcon } from "@heroicons/vue/outline"
 import { sendMessage, onMessage } from "webext-bridge"
 import { scrapeStorage, strLastScraped } from "~/logic"
 
-const isFetching = ref(false)
+const isLoading = ref(false)
+const isScrapping = ref(false)
 const isDownloading = ref(false)
-const currentPageNumber = ref(parseInt(strLastScraped.value) + 1)
-const pagesScraped = ref(0)
+const currentPageNumber = ref(0)
+const lastPageNumber = ref(0)
 
-if (scrapeStorage.value)
-  pagesScraped.value = Object.keys(scrapeStorage.value).length
+onMounted(() => {
+  isLoading.value = true
+  send("init")
+})
 
+// get count of total scrapped page
+const getTotalPagesScraped = computed(() => {
+  return scrapeStorage.value ? Object.keys(scrapeStorage.value).length : 0
+})
+// get last scrapped page
+const getLastScrapedPageNumber = computed(() => {
+  return strLastScraped.value ? strLastScraped.value : 0
+})
+
+// scrap actions
 function sendAction() {
-  if (!isFetching.value) {
-    isFetching.value = true
-    send('start')
+  if (!isScrapping.value) {
+    isScrapping.value = true
+    send("start")
   }
   else {
-    send('stop')
+    send("stop")
   }
 }
 
+// send message to content script
 function send(action) {
-  console.log("action", action)
   chrome.tabs.query({ currentWindow: true, active: true }, async(tabs) => {
     const activeTab = tabs[0].id
     // sendMessage(action, {}, `content-script@${activeTab}`)
-
     sendMessage(
       action,
-      { pageNumber: currentPageNumber.value },
+      {
+        currentPageNumber: currentPageNumber.value,
+        lastPageNumber: lastPageNumber.value,
+        scrapeStorage: scrapeStorage.value,
+        totalPagesScraped: getTotalPagesScraped.value,
+      },
       { context: "content-script", tabId: activeTab },
     )
   })
 }
 
+// reset page
 function resetPage() {
-  pagesScraped.value = 0
   scrapeStorage.value = {}
   strLastScraped.value = 0
-  currentPageNumber.value = 1
+  send("init")
 }
 
+// Set Initial State
+onMessage("setInitialData", ({ data }) => {
+  currentPageNumber.value = data.currentPageNumber ? data.currentPageNumber : 1
+  lastPageNumber.value = data.lastPageNumber ? data.lastPageNumber : 1
+  isLoading.value = false
+})
+// stop srapping
 onMessage("onStop", ({ data }) => {
-  console.log('STOPPED')
-  isFetching.value = false
+  isScrapping.value = false
 })
 
+// change page
 onMessage("changePage", ({ data }) => {
   console.log("change page", data)
 
   strLastScraped.value = data.page
   scrapeStorage.value[data.page] = data.data
-  currentPageNumber.value = parseInt(data.page) + 1
-
-  if (scrapeStorage.value)
-    pagesScraped.value = Object.keys(scrapeStorage.value).length
-
-  send("start")
+  if (parseInt(data.lastPage) > parseInt(data.page)) {
+    currentPageNumber.value = parseInt(data.page) + 1
+    send("start")
+  }
 })
 
+// download scrapped content
 async function downloadCSV() {
   isDownloading.value = true
 
