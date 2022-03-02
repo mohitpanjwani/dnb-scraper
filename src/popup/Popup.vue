@@ -55,7 +55,7 @@
             ? 'bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500'
             : 'bg-emerald-400 hover:bg-emerald-500 focus:ring-emerald-300',
         ]"
-        :disabled="isLoading || isScrapping"
+        :disabled="getTotalPagesScraped==0 || isScrapping"
         @click="downloadCSV"
       >
         <DownloadIcon v-if="!isDownloading" class="-ml-1 h-5 w-5 mr-2" />
@@ -238,7 +238,7 @@ onMessage("setInitialData", ({ data }) => {
   status.value
     = parseInt(getTotalPagesScraped.value) === 0
       ? ''
-      : (parseInt(lastPageNumber.value) === parseInt(getTotalPagesScraped.value)
+      : (parseInt(lastPageNumber.value) === parseInt(currentPageNumber.value)
         ? "COMPLETED"
         : "STOPPED")
 })
@@ -246,7 +246,7 @@ onMessage("setInitialData", ({ data }) => {
 onMessage("onStop", ({ data }) => {
   isScrapping.value = false
   status.value
-    = parseInt(lastPageNumber.value) === parseInt(getTotalPagesScraped.value)
+    = parseInt(lastPageNumber.value) === parseInt(currentPageNumber.value)
       ? "COMPLETED"
       : "STOPPED"
 })
