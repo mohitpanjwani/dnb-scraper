@@ -30,6 +30,7 @@ export async function getManifest() {
       'tabs',
       'storage',
       'activeTab',
+      'unlimitedStorage',
       'http://*/',
       'https://*/',
       'file:///*',

@@ -3,17 +3,16 @@ import { onMessage, sendMessage } from "webext-bridge";
 
 // Firefox `browser.tabs.executeScript()` requires scripts return a primitive value
 (() => {
-  // communication example: send previous tab title from background page
-  /* onMessage('tab-prev', ({ data }) => {
-    console.log(`[vitesse-webext] Navigate from page "${data.title}"`)
-  }) */
-
-  onMessage("init", () => {
-    init()
+  onMessage("getPageInfo", () => {
+    getPageInfo()
   })
 
-  onMessage("start", ({ data }) => {
+  onMessage("startScraping", ({ data }) => {
     start(data)
+  })
+
+  onMessage("nextPage", () => {
+    gotoNextPage()
   })
 
   onMessage("stop", () => {
@@ -23,7 +22,13 @@ import { onMessage, sendMessage } from "webext-bridge";
 
 var interval = null
 
-function init() {
+// send message to defined context "content-script" | "popup" | "devtools" | "background"
+function send(action, context, data = {}) {
+  sendMessage(action, data, { context })
+}
+
+// get current and last page
+function getPageInfo() {
   const stateCheck = setInterval(() => {
     if (document.readyState === "complete") {
       clearInterval(stateCheck)
@@ -31,15 +36,16 @@ function init() {
 
       if (pageInfo) {
         const page = pageInfo.textContent.replace(/\s(of)\s/g, ",").split(",")
-        sendMessage(
-          "setInitialData",
-          { currentPageNumber: page[0], lastPageNumber: page[1] },
-          { context: "popup" },
-        )
+        send("setInitialState", "background", {
+          currentPageNumber: parseInt(page[0]),
+          lastPageNumber: parseInt(page[1]),
+        })
       }
     }
   }, 100)
 }
+
+// start scraping
 function start(data) {
   if (document.readyState === "ready" || document.readyState === "complete") {
     startScraping(data)
@@ -51,17 +57,12 @@ function start(data) {
   }
 }
 
-function stop() {
-  if (interval) clearInterval(interval)
-
-  sendMessage("onStop", {}, { context: "popup" })
-}
-
+// check "result-container" is loaded or not
 function checkIfLoaded(data) {
   interval = setInterval(() => {
     if (document.getElementsByClassName("result-container").length >= 1) {
       clearInterval(interval)
-      scrapPage(data)
+      scrapePage(data)
     }
   }, 1000)
 }
@@ -70,26 +71,26 @@ function startScraping(data) {
   const pageLoaded
     = document.getElementsByClassName("result-container").length >= 1
 
-  if (pageLoaded) scrapPage(data)
+  if (pageLoaded) scrapePage(data)
   else checkIfLoaded(data)
 }
 
-function scrapPage({ currentPageNumber, lastPageNumber, totalPagesScraped }) {
-  let columns = []
+// scrape data
+function scrapePage({ currentPageNumber, lastPageNumber, totalPagesScraped }) {
+  const columns = []
   const data = []
-  // console.log("starting", currentPageNumber)
 
   // Get table headers
   if (totalPagesScraped === 0) {
-    columns = document.querySelectorAll(
+    let fields = document.querySelectorAll(
       ".result-container .ant-table-header table thead th:not(.ant-table-selection-column):not(.actions)",
     )
-    columns = [...columns]
+    fields = [...fields]
       .filter(e => e.textContent !== "")
       .map((e) => {
         return `"${e.textContent.replace(/^\"(.+)\"$/, '"')}"`
       })
-    data.push(columns)
+    columns.push(fields)
   }
 
   if (totalPagesScraped > 0 || columns?.length > 0) {
@@ -114,26 +115,36 @@ function scrapPage({ currentPageNumber, lastPageNumber, totalPagesScraped }) {
       }
 
       sendMessage(
-        "changePage",
-        { page: currentPageNumber, lastPage: lastPageNumber, data },
-        { context: "popup" },
+        "setData",
+        { page: currentPageNumber, lastPage: lastPageNumber, data, columns },
+        { context: "background" },
       )
       if (currentPageNumber >= lastPageNumber) {
         stop()
         return false
       }
-      else {
-        document.getElementById("next")?.click()
-      }
     }
   }
 }
 
+// goto next page
+function gotoNextPage() {
+  document.getElementById("next")?.click()
+}
+
+// stop scraping
+function stop() {
+  if (interval) clearInterval(interval)
+
+  sendMessage("stop", {}, { context: "background" })
+}
+
+// change event for goto page number
 const gotoNumber = document.querySelector(".ant-input-number-input")
 gotoNumber?.addEventListener("change", (e) => {
   sendMessage(
-    "updateCurrentPageNumber",
+    "changeGotoPageNumber",
     { gotoPageNumber: e.target.value },
-    { context: "popup" },
+    { context: "background" },
   )
 })
