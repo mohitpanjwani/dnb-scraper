@@ -1,7 +1,9 @@
 <template>
   <div class="m-5 space-y-4">
     <dl class="mt-5 grid grid-cols-1 gap-5">
-      <div class="px-2 py-3 bg-indigo-500 shadow rounded-lg overflow-hidden sm:p-6">
+      <div
+        class="px-2 py-3 bg-indigo-500 shadow rounded-lg overflow-hidden sm:p-6"
+      >
         <dt class="text-sm font-medium text-gray-200 truncate">
           Current Page
         </dt>
@@ -10,23 +12,25 @@
         </dd>
       </div>
 
-      <div class="px-2 py-3 bg-gray-100 shadow rounded-lg overflow-hidden sm:p-6">
+      <div
+        class="px-2 py-3 bg-gray-100 shadow rounded-lg overflow-hidden sm:p-6"
+      >
         <dt class="text-sm font-medium text-gray-500 truncate">
           Last Scraped Page
         </dt>
         <dd class="mt-1 text-3xl font-semibold text-gray-900">
-          {{
-            getLastScrapedPageNumber
-          }}
+          {{ lastScrapedPageNumber }}
         </dd>
       </div>
 
-      <div class="px-2 py-3 bg-gray-100 shadow rounded-lg overflow-hidden sm:p-6">
+      <div
+        class="px-2 py-3 bg-gray-100 shadow rounded-lg overflow-hidden sm:p-6"
+      >
         <dt class="text-sm font-medium text-gray-500 truncate">
           Total Pages Scraped
         </dt>
         <dd class="mt-1 text-3xl font-semibold text-gray-900">
-          {{ getTotalPagesScraped }}
+          {{ totalPagesScraped }}
         </dd>
       </div>
     </dl>
@@ -55,7 +59,7 @@
             ? 'bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500'
             : 'bg-emerald-400 hover:bg-emerald-500 focus:ring-emerald-300',
         ]"
-        :disabled="getTotalPagesScraped==0 || isScrapping"
+        :disabled="totalPagesScraped == 0 || isScraping || isDownloading"
         @click="downloadCSV"
       >
         <DownloadIcon v-if="!isDownloading" class="-ml-1 h-5 w-5 mr-2" />
@@ -102,7 +106,7 @@
           disabled:bg-gray-400
         "
         :class="[
-          !isScrapping
+          !isScraping
             ? 'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
             : 'bg-indigo-500 hover:bg-indigo-600 focus:ring-indigo-400',
         ]"
@@ -110,12 +114,12 @@
         @click="sendAction"
       >
         <PlayIcon
-          v-if="!isScrapping"
+          v-if="!isScraping"
           id="resume_icon"
           class="-ml-1 h-5 w-5 mr-2"
         />
         <PauseIcon v-else id="pause_icon" class="-ml-1 h-5 w-5 mr-2" />
-        <span v-if="!isScrapping"> Start Scraping </span>
+        <span v-if="!isScraping"> Start Scraping </span>
         <span v-else> Pause Scraping </span>
       </button>
 
@@ -138,8 +142,8 @@
           focus:ring-gray-500
           disabled:bg-gray-400
         "
-        :disabled="isLoading || isScrapping"
-        @click="resetPage"
+        :disabled="isLoading || isScraping"
+        @click="resetData"
       >
         <RefreshIcon class="-ml-1 h-5 w-5 mr-2" />
         <span>Reset Data</span>
@@ -152,137 +156,83 @@
 import { RefreshIcon, PlayIcon, PauseIcon } from "@heroicons/vue/solid"
 import { DownloadIcon } from "@heroicons/vue/outline"
 import { sendMessage, onMessage } from "webext-bridge"
-import { scrapeStorage, strLastScraped } from "~/logic"
 
 const isLoading = ref(false)
-const isScrapping = ref(false)
+const isScraping = ref(false)
 const isDownloading = ref(false)
-const currentPageNumber = ref(1)
-const lastPageNumber = ref(1)
-const status = ref(null) // RUNNING, STOPPED, COMPLETED
+const currentPageNumber = ref(0)
+const lastPageNumber = ref(0)
+const lastScrapedPageNumber = ref(0)
+const totalPagesScraped = ref(0)
 
 onMounted(() => {
   isLoading.value = true
-  send("init")
+  send("init", "background")
 })
 
-watch(status, () => {
-  let path = ""
-  switch (status.value) {
-    case "RUNNING":
-      path = "/assets/running.png"
-      break
-    case "STOPPED":
-      path = "/assets/stopping.png"
-      break
-    case "COMPLETED":
-      path = "/assets/complete.png"
-      break
-    default:
-      path = "/assets/default.png"
-  }
-  chrome.browserAction.setIcon({ path })
-})
-
-// get count of total scrapped page
-const getTotalPagesScraped = computed(() => {
-  return scrapeStorage.value ? Object.keys(scrapeStorage.value).length : 0
-})
-// get last scrapped page
-const getLastScrapedPageNumber = computed(() => {
-  return strLastScraped.value ? parseInt(strLastScraped.value) : 0
-})
-
-// scrap actions
-function sendAction() {
-  if (!isScrapping.value) {
-    isScrapping.value = true
-    send("start")
-  }
-  else {
-    send("stop")
-  }
-}
-
-// send message to content script
-function send(action) {
-  chrome.tabs.query({ currentWindow: true, active: true }, async(tabs) => {
-    const activeTab = tabs[0].id
-    // sendMessage(action, {}, `content-script@${activeTab}`)
-    sendMessage(
-      action,
-      {
-        currentPageNumber: parseInt(currentPageNumber.value),
-        lastPageNumber: parseInt(lastPageNumber.value),
-        totalPagesScraped: parseInt(getTotalPagesScraped.value),
-      },
-      { context: "content-script", tabId: activeTab },
-    )
+// send message to defined context "content-script" | "popup" | "devtools" | "background"
+function send(action, context, data = {}) {
+  chrome.tabs.query({ currentWindow: true, active: true }, (tabs) => {
+    const activeTab = tabs[0]?.id
+    Object.assign(data, { tabId: activeTab })
+    sendMessage(action, data, { context, tabId: activeTab })
   })
 }
 
-// reset page
-function resetPage() {
-  scrapeStorage.value = {}
-  strLastScraped.value = 0
-  status.value = ""
-  send("init")
+// scrape actions
+function sendAction() {
+  if (!isScraping.value) {
+    isScraping.value = true
+    send("start", "background")
+  }
+  else {
+    send("stop", "content-script")
+  }
+}
+// reset data
+function resetData() {
+  send("reset", "background")
 }
 
-// Set Initial State
-onMessage("setInitialData", ({ data }) => {
+// reset state
+onMessage("resetState", ({ data }) => {
+  totalPagesScraped.value = data.totalPagesScraped
+  lastScrapedPageNumber.value = data.lastScrapedPageNumber
+})
+
+// set page info
+onMessage("setPageInfo", ({ data }) => {
+  isLoading.value = data.isLoading ? data.isLoading : false
+  isScraping.value = data.isScraping ? data.isScraping : false
   currentPageNumber.value = data.currentPageNumber ? data.currentPageNumber : 1
   lastPageNumber.value = data.lastPageNumber ? data.lastPageNumber : 1
-  isLoading.value = false
-
-  status.value
-    = parseInt(getTotalPagesScraped.value) === 0
-      ? ''
-      : (parseInt(lastPageNumber.value) === parseInt(currentPageNumber.value)
-        ? "COMPLETED"
-        : "STOPPED")
-})
-// stop srapping
-onMessage("onStop", ({ data }) => {
-  isScrapping.value = false
-  status.value
-    = parseInt(lastPageNumber.value) === parseInt(currentPageNumber.value)
-      ? "COMPLETED"
-      : "STOPPED"
+  lastScrapedPageNumber.value = data.lastScrapedPageNumber
+    ? data.lastScrapedPageNumber
+    : 0
+  totalPagesScraped.value = data.totalPagesScraped ? data.totalPagesScraped : 0
 })
 
-// change page
-onMessage("changePage", ({ data }) => {
-  console.log("change page", data)
-
-  status.value = "RUNNING"
-  strLastScraped.value = data.page
-  scrapeStorage.value[data.page] = data.data
-  if (parseInt(data.lastPage) > parseInt(data.page)) {
-    currentPageNumber.value = parseInt(data.page) + 1
-    send("start")
-  }
+// stop scraping
+onMessage("stopScraping", () => {
+  isScraping.value = false
 })
 
 // update current page number through goto change number
 onMessage("updateCurrentPageNumber", ({ data }) => {
-  currentPageNumber.value = data.gotoPageNumber ? data.gotoPageNumber : 1
+  currentPageNumber.value = data.currentPageNumber ? data.currentPageNumber : 1
 })
 
-// download scrapped content
-async function downloadCSV() {
-  isDownloading.value = true
+onMessage("downloadData", ({ data }) => {
+  if (!data.totalPagesScraped) return false
 
-  if (!scrapeStorage.value) return
+  let scrapeData = []
 
-  let data = []
-
-  Object.keys(scrapeStorage.value).forEach((key, index) => {
-    data = data.concat(scrapeStorage.value[key])
+  Object.keys(data.scrapeStorage).forEach((key, index) => {
+    scrapeData = scrapeData.concat(data.scrapeStorage[key])
   })
 
   setTimeout(() => {
-    let csvContent = data.map(e => e.join(",")).join("\n")
+    let csvContent = scrapeData.map(e => e.join(",")).join("\n")
     csvContent = `data:text/csv;charset=utf-8,${csvContent}`
     const encodedUri = encodeURI(csvContent)
     const downloadLink = document.createElement("a")
@@ -294,5 +244,11 @@ async function downloadCSV() {
     document.body.removeChild(downloadLink)
     isDownloading.value = false
   }, 500)
+})
+
+// download scraped content
+function downloadCSV() {
+  isDownloading.value = true
+  send("getScrapedStorageData", "background")
 }
 </script>

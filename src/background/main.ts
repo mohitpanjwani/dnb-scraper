@@ -1,54 +1,182 @@
-import { sendMessage, onMessage } from 'webext-bridge'
-import { Tabs } from 'webextension-polyfill'
+import { sendMessage, onMessage } from "webext-bridge"
+// import { Tabs } from "webextension-polyfill"
+import {
+  scrapeStorageColumns,
+  scrapeStorageData,
+  strLastScraped,
+} from "~/logic"
+
+const isLoading = ref(false)
+const isScraping = ref(false)
+const currentPageNumber = ref(0)
+const lastPageNumber = ref(0)
+const status = ref(null) // RUNNING, STOPPED, COMPLETED
+const myTabId = ref(null)
 
 // only on dev mode
 if (import.meta.hot) {
   // @ts-expect-error for background HMR
-  import('/@vite/client')
+  import("/@vite/client")
   // load latest content script
-  import('./contentScriptHMR')
+  import("./contentScriptHMR")
 }
 
 browser.runtime.onInstalled.addListener((): void => {
   // eslint-disable-next-line no-console
-  console.log('Extension installed')
+  console.log("Extension installed")
 })
 
-let previousTabId = 0
-
-// communication example: send previous tab title from background page
-// see shim.d.ts for type declaration
-browser.tabs.onActivated.addListener(async({ tabId }) => {
-  if (!previousTabId) {
-    previousTabId = tabId
-    return
-  }
-
-  let tab: Tabs.Tab
-
-  try {
-    tab = await browser.tabs.get(previousTabId)
-    previousTabId = tabId
-  }
-  catch {
-    return
-  }
-
-  // eslint-disable-next-line no-console
-  // console.log('previous tab', tab)
-  sendMessage('tab-prev', { title: tab.title }, { context: 'content-script', tabId })
+/* ************* */
+// get count of total scraped page
+const getTotalPagesScraped = computed(() => {
+  return scrapeStorageData.value
+    ? Object.keys(scrapeStorageData.value).length
+    : 0
 })
 
-onMessage('get-current-tab', async() => {
-  try {
-    const tab = await browser.tabs.get(previousTabId)
-    return {
-      title: tab?.title,
-    }
+// get last scraped page
+const getLastScrapedPageNumber = computed(() => {
+  return strLastScraped.value ? strLastScraped.value : 0
+})
+
+// set icon
+watch(status, () => {
+  let path = ""
+  switch (status.value) {
+    case "RUNNING":
+      path = "/assets/running.png"
+      break
+    case "STOPPED":
+      path = "/assets/stopping.png"
+      break
+    case "COMPLETED":
+      path = "/assets/complete.png"
+      break
+    default:
+      path = "/assets/default.png"
   }
-  catch {
-    return {
-      title: undefined,
+  chrome.browserAction.setIcon({ path })
+})
+
+// send message to defined context "content-script" | "popup" | "devtools" | "background"
+function send(action, context, data = {}) {
+  if (myTabId.value)
+    sendMessage(action, data, { context, tabId: myTabId.value })
+}
+
+// start scraping with send page info
+function startScraping() {
+  send("startScraping", "content-script", {
+    currentPageNumber: parseInt(currentPageNumber.value),
+    lastPageNumber: parseInt(lastPageNumber.value),
+    totalPagesScraped: parseInt(getTotalPagesScraped.value),
+    isScraping: isScraping.value,
+  })
+}
+// update page info into popup
+function updatePageInfo() {
+  send("setPageInfo", "popup", {
+    currentPageNumber: currentPageNumber.value,
+    lastPageNumber: lastPageNumber.value,
+    isLoading: isLoading.value,
+    isScraping: isScraping.value,
+    lastScrapedPageNumber: parseInt(getLastScrapedPageNumber.value),
+    totalPagesScraped: parseInt(getTotalPagesScraped.value),
+  })
+}
+
+// get page info at the time of open popup
+onMessage("init", ({ data }) => {
+  isLoading.value = true
+  if (!isScraping.value) myTabId.value = data.tabId ? data.tabId : null
+
+  send("getPageInfo", "content-script")
+})
+
+// set page info at the time of open popup
+onMessage("setInitialState", ({ data }) => {
+  isLoading.value = false
+  currentPageNumber.value = data.currentPageNumber ? data.currentPageNumber : 1
+  lastPageNumber.value = data.lastPageNumber ? data.lastPageNumber : 1
+
+  updatePageInfo()
+})
+
+// reset scraped data
+onMessage("reset", ({ data }) => {
+  scrapeStorageColumns.value = {}
+  scrapeStorageData.value = {}
+  strLastScraped.value = 0
+  status.value = ""
+  myTabId.value = data.tabId ? data.tabId : null
+  send("resetState", "popup", {
+    lastScrapedPageNumber: parseInt(getLastScrapedPageNumber.value),
+    totalPagesScraped: parseInt(getTotalPagesScraped.value),
+  })
+  myTabId.value = null
+})
+
+// start scraping
+onMessage("start", ({ data }) => {
+  isScraping.value = true
+  myTabId.value = data.tabId ? data.tabId : null
+  status.value = "RUNNING"
+  startScraping()
+})
+
+// set scraped data to local storage and goto next page if exists
+onMessage("setData", ({ data }) => {
+  strLastScraped.value = data.page
+  if (data.columns.length) scrapeStorageColumns.value[0] = data.columns
+
+  scrapeStorageData.value[data.page] = data.data
+
+  updatePageInfo()
+
+  setTimeout(() => {
+    if (isScraping.value && parseInt(data.lastPage) > parseInt(data.page)) {
+      currentPageNumber.value = parseInt(data.page) + 1
+      // scraping next page
+      send("nextPage", "content-script")
+      send("getPageInfo", "content-script")
+      startScraping()
     }
-  }
+  }, 500)
+})
+
+// stop scraping
+onMessage("stop", () => {
+  isScraping.value = false
+  status.value
+    = parseInt(lastPageNumber.value) === parseInt(currentPageNumber.value)
+      ? "COMPLETED"
+      : "STOPPED"
+
+  send("stopScraping", "popup")
+  myTabId.value = null
+})
+
+// update current page number through goto change number
+onMessage("changeGotoPageNumber", ({ data }) => {
+  currentPageNumber.value = data.gotoPageNumber ? data.gotoPageNumber : 1
+  send("updateCurrentPageNumber", "popup", {
+    currentPageNumber: currentPageNumber.value,
+  })
+})
+
+// get scraped storage data
+onMessage("getScrapedStorageData", ({ data }) => {
+  myTabId.value = data.tabId ? data.tabId : null
+
+  const scrapeStorage = Object.assign(
+    {},
+    scrapeStorageColumns.value,
+    scrapeStorageData.value,
+  )
+
+  send("downloadData", "popup", {
+    scrapeStorage,
+    totalPagesScraped: parseInt(getTotalPagesScraped.value),
+  })
+  myTabId.value = false
 })
