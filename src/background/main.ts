@@ -34,6 +34,15 @@ const getTotalPagesScraped = computed(() => {
     : 0
 })
 
+// get count of total rows scraped
+const getTotalRowsScraped = computed(() => {
+  let totalRows = 0
+  Object.keys(scrapeStorageData.value).forEach((key) => {
+    totalRows += scrapeStorageData.value[key].length
+  })
+  return totalRows
+})
+
 // get last scraped page
 const getLastScrapedPageNumber = computed(() => {
   return strLastScraped.value ? strLastScraped.value : 0
@@ -82,6 +91,7 @@ function updatePageInfo() {
     isScraping: isScraping.value,
     lastScrapedPageNumber: parseInt(getLastScrapedPageNumber.value),
     totalPagesScraped: parseInt(getTotalPagesScraped.value),
+    totalRowsScraped: parseInt(getTotalRowsScraped.value),
   })
 }
 
@@ -112,6 +122,7 @@ onMessage("reset", ({ data }) => {
   send("resetState", "popup", {
     lastScrapedPageNumber: parseInt(getLastScrapedPageNumber.value),
     totalPagesScraped: parseInt(getTotalPagesScraped.value),
+    totalRowsScraped: parseInt(getTotalRowsScraped.value),
   })
   myTabId.value = null
 })

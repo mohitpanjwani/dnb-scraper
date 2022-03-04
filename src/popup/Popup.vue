@@ -27,9 +27,11 @@
         class="px-2 py-3 bg-gray-100 shadow rounded-lg overflow-hidden sm:p-6"
       >
         <dt class="text-sm font-medium text-gray-500 truncate">
-          Total Pages Scraped
+          Total Scraped Rows<span class="px-1">/</span>Pages
         </dt>
         <dd class="mt-1 text-3xl font-semibold text-gray-900">
+          {{ totalRowsScraped }}
+          <span class="text-gray-500 px-1">/</span>
           {{ totalPagesScraped }}
         </dd>
       </div>
@@ -164,6 +166,7 @@ const currentPageNumber = ref(0)
 const lastPageNumber = ref(0)
 const lastScrapedPageNumber = ref(0)
 const totalPagesScraped = ref(0)
+const totalRowsScraped = ref(0)
 
 onMounted(() => {
   isLoading.value = true
@@ -196,8 +199,9 @@ function resetData() {
 
 // reset state
 onMessage("resetState", ({ data }) => {
-  totalPagesScraped.value = data.totalPagesScraped
   lastScrapedPageNumber.value = data.lastScrapedPageNumber
+  totalPagesScraped.value = data.totalPagesScraped
+  totalRowsScraped.value = data.totalRowsScraped
 })
 
 // set page info
@@ -210,6 +214,7 @@ onMessage("setPageInfo", ({ data }) => {
     ? data.lastScrapedPageNumber
     : 0
   totalPagesScraped.value = data.totalPagesScraped ? data.totalPagesScraped : 0
+  totalRowsScraped.value = data.totalRowsScraped ? data.totalRowsScraped : 0
 })
 
 // stop scraping
