@@ -156,7 +156,6 @@ function bindGotoPageEvent() {
   }, 1000)
 
   function changePage(e) {
-    console.log("asdfdsfewrewrewwwwww", new Date().getTime())
     sendMessage(
       "changeGotoPageNumber",
       { gotoPageNumber: e.target.value },
