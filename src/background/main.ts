@@ -100,7 +100,7 @@ onMessage("init", ({ data }) => {
   isLoading.value = true
   if (!isScraping.value) myTabId.value = data.tabId ? data.tabId : null
 
-  send("getPageInfo", "content-script")
+  send("getPageInfo", "content-script", { tabId: myTabId.value })
 })
 
 // set page info at the time of open popup
@@ -109,7 +109,9 @@ onMessage("setInitialState", ({ data }) => {
   currentPageNumber.value = data.currentPageNumber ? data.currentPageNumber : 1
   lastPageNumber.value = data.lastPageNumber ? data.lastPageNumber : 1
 
+  if (!isScraping.value) myTabId.value = data.tabId ? data.tabId : null
   updatePageInfo()
+  if (!isScraping.value) myTabId.value = null
 })
 
 // reset scraped data
@@ -146,13 +148,14 @@ onMessage("setData", ({ data }) => {
 
   setTimeout(() => {
     if (isScraping.value && parseInt(data.lastPage) > parseInt(data.page)) {
-      currentPageNumber.value = parseInt(data.page) + 1
       // scraping next page
-      send("nextPage", "content-script")
-      send("getPageInfo", "content-script")
-      startScraping()
+      send("nextPage", "content-script", { tabId: myTabId.value })
     }
   }, 500)
+})
+
+onMessage("startNextPageScraping", () => {
+  startScraping()
 })
 
 // stop scraping
@@ -189,5 +192,5 @@ onMessage("getScrapedStorageData", ({ data }) => {
     scrapeStorage,
     totalPagesScraped: parseInt(getTotalPagesScraped.value),
   })
-  myTabId.value = false
+  myTabId.value = null
 })
