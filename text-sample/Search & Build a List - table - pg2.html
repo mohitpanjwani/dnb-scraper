@@ -7782,7 +7782,7 @@ drift.SNIPPET_VERSION = '0.3.1'
                         </div>
                       </div>
                     </div>
-                    <div style="display: flex; justify-content: flex-end; padding-top: 40px; padding-bottom: 40px;">
+                    <div v-if="message != 'loading'" style="display: flex; justify-content: flex-end; padding-top: 40px; padding-bottom: 40px;">
                       <div class="pagination"><button class="pagination-nav" id="previous" @click="goPrevious()"><svg
                             viewBox="0 0 24 24" class="" height="24px">
                             <path
@@ -7870,7 +7870,7 @@ drift.SNIPPET_VERSION = '0.3.1'
           message: 'first',
           currentPage: 1,
           goPageNumber: '',
-          lastPage: 10
+          lastPage: 10,
         }
       },
       methods: {

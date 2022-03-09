@@ -3,16 +3,16 @@ import { onMessage, sendMessage } from "webext-bridge";
 
 // Firefox `browser.tabs.executeScript()` requires scripts return a primitive value
 (() => {
-  onMessage("getPageInfo", () => {
-    getPageInfo()
+  onMessage("getPageInfo", ({ data }) => {
+    getPageInfo(data)
   })
 
   onMessage("startScraping", ({ data }) => {
     start(data)
   })
 
-  onMessage("nextPage", () => {
-    gotoNextPage()
+  onMessage("nextPage", ({ data }) => {
+    gotoNextPage(data)
   })
 
   onMessage("stop", () => {
@@ -20,27 +20,24 @@ import { onMessage, sendMessage } from "webext-bridge";
   })
 })()
 
-var interval = null
-
 // send message to defined context "content-script" | "popup" | "devtools" | "background"
 function send(action, context, data = {}) {
   sendMessage(action, data, { context })
 }
 
 // get current and last page
-function getPageInfo() {
-  const stateCheck = setInterval(() => {
-    if (document.readyState === "complete") {
+function getPageInfo(tabId) {
+  var stateCheck = setInterval(() => {
+    const pageInfo = document.querySelector(".pagination-page-info")
+    if (document.readyState === "complete" && pageInfo) {
       clearInterval(stateCheck)
-      const pageInfo = document.querySelector(".pagination-page-info")
 
-      if (pageInfo) {
-        const page = pageInfo.textContent.replace(/\s(of)\s/g, ",").split(",")
-        send("setInitialState", "background", {
-          currentPageNumber: parseInt(page[0]),
-          lastPageNumber: parseInt(page[1]),
-        })
-      }
+      const page = pageInfo.textContent.replace(/\s(of)\s/g, ",").split(",")
+      send("setInitialState", "background", {
+        currentPageNumber: parseInt(page[0]),
+        lastPageNumber: parseInt(page[1]),
+        tabId,
+      })
     }
   }, 100)
 }
@@ -59,7 +56,7 @@ function start(data) {
 
 // check "result-container" is loaded or not
 function checkIfLoaded(data) {
-  interval = setInterval(() => {
+  var interval = setInterval(() => {
     if (document.getElementsByClassName("result-container").length >= 1) {
       clearInterval(interval)
       scrapePage(data)
@@ -128,23 +125,48 @@ function scrapePage({ currentPageNumber, lastPageNumber, totalPagesScraped }) {
 }
 
 // goto next page
-function gotoNextPage() {
-  document.getElementById("next")?.click()
+function gotoNextPage(data) {
+  if (document.getElementById("next")) {
+    document.getElementById("next").click()
+    getPageInfo(data)
+    var interval = setInterval(() => {
+      if (document.getElementsByClassName("result-container").length >= 1) {
+        clearInterval(interval)
+        sendMessage("startNextPageScraping", {}, { context: "background" })
+        bindGotoPageEvent()
+      }
+    }, 1000)
+  }
 }
 
 // stop scraping
 function stop() {
-  if (interval) clearInterval(interval)
-
   sendMessage("stop", {}, { context: "background" })
 }
 
 // change event for goto page number
-const gotoNumber = document.querySelector(".ant-input-number-input")
-gotoNumber?.addEventListener("change", (e) => {
-  sendMessage(
-    "changeGotoPageNumber",
-    { gotoPageNumber: e.target.value },
-    { context: "background" },
-  )
-})
+function bindGotoPageEvent() {
+  var interval = setInterval(() => {
+    const gotoNumber = document.querySelector(".ant-input-number-input")
+    if (gotoNumber) {
+      clearInterval(interval)
+      gotoNumber.removeEventListener("change", changePage)
+      gotoNumber.addEventListener("change", changePage)
+    }
+  }, 1000)
+
+  function changePage(e) {
+    sendMessage(
+      "changeGotoPageNumber",
+      { gotoPageNumber: e.target.value },
+      { context: "background" },
+    )
+    sendMessage(
+      "updateCurrentPageNumber",
+      { currentPageNumber: e.target.value },
+      { context: "popup" },
+    )
+    bindGotoPageEvent()
+  }
+}
+bindGotoPageEvent()
