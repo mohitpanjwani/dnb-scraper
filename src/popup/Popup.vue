@@ -237,12 +237,14 @@ onMessage("downloadData", ({ data }) => {
   })
 
   setTimeout(() => {
-    let csvContent = scrapeData.map(e => e.join(",")).join("\n")
-    csvContent = `data:text/csv;charset=utf-8,${csvContent}`
-    const encodedUri = encodeURI(csvContent)
+    const csvContent = scrapeData.map(e => e.join(",")).join("\n")
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' })
+    const url = window.URL.createObjectURL(blob)
+
     const downloadLink = document.createElement("a")
     downloadLink.download = `dnb.csv`
-    downloadLink.href = encodedUri
+    downloadLink.href = url
     downloadLink.style.display = "none"
     document.body.appendChild(downloadLink)
     downloadLink.click()
