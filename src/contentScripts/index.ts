@@ -32,7 +32,7 @@ function getPageInfo(tabId) {
     if (document.readyState === "complete" && pageInfo) {
       clearInterval(stateCheck)
 
-      const page = pageInfo.textContent.replace(/\s(of)\s/g, ",").split(",")
+      const page = pageInfo.textContent.replace(/\s(of)\s/g, "|").replace(",", "").split("|")
       send("setInitialState", "background", {
         currentPageNumber: parseInt(page[0]),
         lastPageNumber: parseInt(page[1]),
